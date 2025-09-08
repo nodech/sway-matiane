@@ -1,10 +1,10 @@
-use tokio_util::codec::{Decoder, Encoder};
-use bytes::{BytesMut, Buf, BufMut};
+use bytes::{Buf, BufMut, BytesMut};
 use std::io::Cursor;
 use thiserror::Error;
+use tokio_util::codec::{Decoder, Encoder};
 
 // use super::common;
-use super::packet::{SwayPacketRaw};
+use super::packet::SwayPacketRaw;
 
 pub struct SwayPacketCodec;
 
@@ -24,7 +24,7 @@ impl Decoder for SwayPacketCodec {
 
     fn decode(
         &mut self,
-        src: &mut BytesMut
+        src: &mut BytesMut,
     ) -> Result<Option<Self::Item>, Self::Error> {
         let header_len = super::MAGIC_LEN + 4 + 4;
 
@@ -42,20 +42,20 @@ impl Decoder for SwayPacketCodec {
 
         if payload_len >= super::EVENT_FLAG {
             src.clear();
-            return Err(SwayPacketCodecError::PayloadLenIncorrect)
+            return Err(SwayPacketCodecError::PayloadLenIncorrect);
         }
 
         let payload_len = payload_len as usize;
         let payload_type = cursor.get_u32_ne();
 
         if cursor.remaining() < payload_len {
-            return Ok(None)
+            return Ok(None);
         }
 
         let mut packet = src.split_to(header_len + payload_len);
         packet.advance(header_len);
 
-        Ok(Some(SwayPacketRaw{
+        Ok(Some(SwayPacketRaw {
             packet_type: payload_type,
             payload: packet.into(),
         }))
@@ -68,7 +68,7 @@ impl Encoder<SwayPacketRaw> for SwayPacketCodec {
     fn encode(
         &mut self,
         item: SwayPacketRaw,
-        dst: &mut BytesMut
+        dst: &mut BytesMut,
     ) -> Result<(), SwayPacketCodecError> {
         let header_len = super::MAGIC_LEN + 4 + 4;
         let payload_len = item.payload.len();
@@ -86,16 +86,14 @@ impl Encoder<SwayPacketRaw> for SwayPacketCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::{SinkExt, StreamExt};
     use std::time::Duration;
-    use futures::{StreamExt, SinkExt};
     use tokio_test::io::Builder;
     use tokio_util::codec::Framed;
 
     #[tokio::test]
     async fn decode_incomplete() {
-        let mock = Builder::new()
-            .read(b"i3-ip")
-            .build();
+        let mock = Builder::new().read(b"i3-ip").build();
 
         let mut framed = Framed::new(mock, SwayPacketCodec);
 
@@ -105,8 +103,11 @@ mod tests {
             Err(SwayPacketCodecError::Io(err)) => {
                 assert_eq!(err.kind(), std::io::ErrorKind::Other);
                 let str = err.to_string();
-                assert!(str.contains("bytes remaining on stream"),
-                    "Expected bytes remaining error, got {:?}.", str);
+                assert!(
+                    str.contains("bytes remaining on stream"),
+                    "Expected bytes remaining error, got {:?}.",
+                    str
+                );
             }
             _ => {
                 panic!("Expected Io error, got: {:?}", &message);
@@ -116,17 +117,17 @@ mod tests {
 
     #[tokio::test]
     async fn decode_incorrect_magic() {
-        let mock = Builder::new()
-            .read(b"i3-ipx")
-            .read(b"12341234")
-            .build();
+        let mock = Builder::new().read(b"i3-ipx").read(b"12341234").build();
 
         let mut framed = Framed::new(mock, SwayPacketCodec);
 
         let message = framed.next().await.expect("Should receive an error.");
 
-        assert!(matches!(message, Err(SwayPacketCodecError::MagicIncorrect)),
-            "Expected magic incorrect error, received: {:?}", message);
+        assert!(
+            matches!(message, Err(SwayPacketCodecError::MagicIncorrect)),
+            "Expected magic incorrect error, received: {:?}",
+            message
+        );
     }
 
     #[tokio::test]
@@ -154,7 +155,10 @@ mod tests {
         assert_eq!(packet.packet_type, payload_type);
         assert_eq!(packet.payload, payload);
 
-        let message = framed.next().await.expect("Should receive a second packet.");
+        let message = framed
+            .next()
+            .await
+            .expect("Should receive a second packet.");
         let packet = message.expect("We must get a packet.");
         assert_eq!(packet.packet_type, payload2_type);
         assert_eq!(packet.payload, payload2);
@@ -215,19 +219,22 @@ mod tests {
 
         let mut framed = Framed::new(mock, SwayPacketCodec);
 
-        let send = framed.send(SwayPacketRaw {
-            packet_type: payload_type,
-            payload: payload.into()
-        }).await;
+        let send = framed
+            .send(SwayPacketRaw {
+                packet_type: payload_type,
+                payload: payload.into(),
+            })
+            .await;
 
         send.expect("Must send the packet.");
 
-        let send = framed.send(SwayPacketRaw {
-            packet_type: payload2_type,
-            payload: payload2.into()
-        }).await;
+        let send = framed
+            .send(SwayPacketRaw {
+                packet_type: payload2_type,
+                payload: payload2.into(),
+            })
+            .await;
 
         send.expect("Must send the packet.");
-
     }
 }

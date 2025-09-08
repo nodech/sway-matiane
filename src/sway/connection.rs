@@ -31,11 +31,16 @@ impl TryFrom<SwayPacketRaw> for Event {
             return Err(SubscribeError::NotAnEvent(packet.packet_type).into());
         }
 
-        let event_type = EventType::try_from(packet.packet_type ^ super::EVENT_FLAG)?;
+        let event_type =
+            EventType::try_from(packet.packet_type ^ super::EVENT_FLAG)?;
 
         match event_type {
-            EventType::Window => Ok(Event::Window(serde_json::from_slice(&packet.payload)?)),
-            _ => Err(SubscribeError::UnsupportedEvent(event_type as u32).into()),
+            EventType::Window => {
+                Ok(Event::Window(serde_json::from_slice(&packet.payload)?))
+            }
+            _ => {
+                Err(SubscribeError::UnsupportedEvent(event_type as u32).into())
+            }
         }
     }
 }
@@ -66,10 +71,13 @@ pub async fn subscribe(
         return Err(SubscribeError::IncorrectResponseType.into());
     }
 
-    let outcome: CommandOutcome = serde_json::de::from_slice(&response.payload)?;
+    let outcome: CommandOutcome =
+        serde_json::de::from_slice(&response.payload)?;
 
     if !outcome.success {
-        return Err(SubscribeError::SubscribeFailed(outcome.error.unwrap()).into());
+        return Err(
+            SubscribeError::SubscribeFailed(outcome.error.unwrap()).into()
+        );
     }
 
     Ok(framer.map(move |res| {

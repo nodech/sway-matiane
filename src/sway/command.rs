@@ -117,7 +117,7 @@ impl TryFrom<u32> for EventType {
             7 => Ok(EventType::Tick),
             20 => Ok(EventType::BarStateUpdate),
             21 => Ok(EventType::Input),
-            v => Err(CommandTypeError::IncorrectEventType(v))
+            v => Err(CommandTypeError::IncorrectEventType(v)),
         }
     }
 }
