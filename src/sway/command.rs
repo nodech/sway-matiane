@@ -1,7 +1,19 @@
-use super::common::SwayPacketCodecError;
+// This is based on https://github.com/JayceFayne/swayipc-rs
+// https://man.archlinux.org/man/sway-ipc.7#MESSAGES_AND_REPLIES
+
+use serde::Serialize;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum CommandTypeError {
+    #[error("Wrong command type `{0}`.")]
+    IncorrectCommandType(u32),
+    #[error("Wrong event type `{0}`.")]
+    IncorrectEventType(u32),
+}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum SwayCommandType {
+pub enum CommandType {
     /// Runs the payload as sway commands.
     RunCommand = 0,
     /// Get the list of current workspaces.
@@ -35,27 +47,77 @@ pub enum SwayCommandType {
     GetSeats = 101,
 }
 
-impl TryFrom<i32> for SwayCommandType {
-    type Error = SwayPacketCodecError;
+impl TryFrom<u32> for CommandType {
+    type Error = CommandTypeError;
 
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(SwayCommandType::RunCommand),
-            1 => Ok(SwayCommandType::GetWorkspaces),
-            2 => Ok(SwayCommandType::Subscribe),
-            3 => Ok(SwayCommandType::GetOutputs),
-            4 => Ok(SwayCommandType::GetTree),
-            5 => Ok(SwayCommandType::GetMarks),
-            6 => Ok(SwayCommandType::GetBarConfig),
-            7 => Ok(SwayCommandType::GetVersion),
-            8 => Ok(SwayCommandType::GetBindingModes),
-            9 => Ok(SwayCommandType::GetConfig),
-            10 => Ok(SwayCommandType::SendTick),
-            11 => Ok(SwayCommandType::Sync),
-            12 => Ok(SwayCommandType::GetBindingState),
-            100 => Ok(SwayCommandType::GetInputs),
-            101 => Ok(SwayCommandType::GetSeats),
-            _ => Err(SwayPacketCodecError::InvalidCommandType(value)),
+    fn try_from(n: u32) -> Result<CommandType, Self::Error> {
+        match n {
+            0 => Ok(CommandType::RunCommand),
+            1 => Ok(CommandType::GetWorkspaces),
+            2 => Ok(CommandType::Subscribe),
+            3 => Ok(CommandType::GetOutputs),
+            4 => Ok(CommandType::GetTree),
+            5 => Ok(CommandType::GetMarks),
+            6 => Ok(CommandType::GetBarConfig),
+            7 => Ok(CommandType::GetVersion),
+            8 => Ok(CommandType::GetBindingModes),
+            9 => Ok(CommandType::GetConfig),
+            10 => Ok(CommandType::SendTick),
+            11 => Ok(CommandType::Sync),
+            12 => Ok(CommandType::GetBindingState),
+            100 => Ok(CommandType::GetInputs),
+            101 => Ok(CommandType::GetSeats),
+            v => Err(CommandTypeError::IncorrectCommandType(v)),
+        }
+    }
+}
+
+/// Source: https://man.archlinux.org/man/sway-ipc.7#EVENTS
+#[derive(Debug, PartialEq, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EventType {
+    /// Sent whenever an event involving a workspace occurs such as
+    /// initialization of a new workspace or a different workspace gains
+    /// focus
+    Workspace = 0,
+    /// Sent when outputs are updated
+    Output = 1,
+    /// Sent whenever the binding mode changes
+    Mode = 2,
+    /// Sent whenever an event involving a window occurs such as being
+    /// reparented, focused, or closed
+    Window = 3,
+    /// Sent whenever a bar config changes
+    #[serde(rename = "barconfig_update")]
+    BarConfigUpdate = 4,
+    /// Sent when a configured binding is executed
+    Binding = 5,
+    /// Sent when the ipc shuts down because sway is exiting
+    Shutdown = 6,
+    /// Sent when an ipc client sends a SEND_TICK message
+    Tick = 7,
+    /// Send when the visibility of a bar should change due to a modifier
+    BarStateUpdate = 20,
+    /// Sent when something related to input devices changes
+    Input = 21,
+}
+
+impl TryFrom<u32> for EventType {
+    type Error = CommandTypeError;
+
+    fn try_from(n: u32) -> Result<EventType, Self::Error> {
+        match n {
+            0 => Ok(EventType::Workspace),
+            1 => Ok(EventType::Output),
+            2 => Ok(EventType::Mode),
+            3 => Ok(EventType::Window),
+            4 => Ok(EventType::BarConfigUpdate),
+            5 => Ok(EventType::Binding),
+            6 => Ok(EventType::Shutdown),
+            7 => Ok(EventType::Tick),
+            20 => Ok(EventType::BarStateUpdate),
+            21 => Ok(EventType::Input),
+            v => Err(CommandTypeError::IncorrectEventType(v))
         }
     }
 }
