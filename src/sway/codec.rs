@@ -6,6 +6,7 @@ use tokio_util::codec::{Decoder, Encoder};
 // use super::common;
 use super::packet::SwayPacketRaw;
 
+#[derive(Debug)]
 pub struct SwayPacketCodec;
 
 #[derive(Debug, Error)]

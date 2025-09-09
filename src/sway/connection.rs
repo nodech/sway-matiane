@@ -5,6 +5,8 @@ use super::reply::{CommandOutcome, Event};
 use anyhow::Result;
 use futures::{SinkExt, StreamExt};
 use serde_json;
+use std::fmt::Debug;
+use std::path::PathBuf;
 use thiserror::Error;
 use tokio::net::UnixStream;
 use tokio_util::codec::Framed;
@@ -27,7 +29,7 @@ impl TryFrom<SwayPacketRaw> for Event {
     type Error = anyhow::Error;
 
     fn try_from(packet: SwayPacketRaw) -> Result<Event> {
-        if (packet.packet_type & super::EVENT_FLAG) == super::EVENT_FLAG {
+        if (packet.packet_type & super::EVENT_FLAG) != super::EVENT_FLAG {
             return Err(SubscribeError::NotAnEvent(packet.packet_type).into());
         }
 
@@ -56,9 +58,9 @@ fn subscribe_packet(event: EventType) -> Result<SwayPacketRaw> {
 }
 
 pub async fn subscribe(
-    path: &str,
+    path: &PathBuf,
     event: EventType,
-) -> Result<impl StreamExt<Item = Result<Event, anyhow::Error>>> {
+) -> Result<impl Debug + StreamExt<Item = Result<Event, anyhow::Error>>> {
     let socket = UnixStream::connect(path).await?;
     let mut framer = Framed::new(socket, SwayPacketCodec);
 
@@ -80,10 +82,12 @@ pub async fn subscribe(
         );
     }
 
+    let raw_event_type = (event as u32) | super::EVENT_FLAG;
+
     Ok(framer.map(move |res| {
         let raw = res?;
 
-        if raw.packet_type != event as u32 {
+        if raw.packet_type != raw_event_type {
             return Err(SubscribeError::IncorrectResponseType.into());
         }
 
