@@ -1,65 +1,91 @@
 use anyhow::Result;
 use futures::StreamExt;
+use std::path::PathBuf;
 use sway_matiane::sway::command::EventType;
 use sway_matiane::sway::connection::subscribe;
 use sway_matiane::sway::reply::{Event, WindowChange};
-use tempfile::Builder;
+use tempfile::{Builder, TempDir};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::UnixListener;
+use tokio::net::{UnixListener, UnixStream};
+use tokio::task::JoinHandle;
 
+#[cfg(target_endian = "little")]
 #[tokio::test]
 async fn sway_window_events_1() -> Result<()> {
+    let server_recv = include_bytes!("data/send01.bin").to_vec();
+    let server_send = include_bytes!("data/receive1.bin").to_vec();
+
+    let MockServer {
+        dir: _dir,
+        bind_path,
+        handle,
+    } = setup_mock_server("window-events-1", server_recv, server_send)?;
+
+    let mut subbed = subscribe(&bind_path, EventType::Window).await?;
+    let single_event = subbed.next().await.unwrap()?;
+
+    let Event::Window(window) = single_event else {
+        panic!("Returned event must be a Window.");
+    };
+
+    assert_eq!(window.change, WindowChange::FullscreenMode);
+    assert_eq!(window.container.id, 10);
+    assert_eq!(
+        window.container.name,
+        Some(String::from(
+            "Alacritty - dev-1 // 2 - zsh // 1 - sway-matiane/src"
+        ))
+    );
+    assert_eq!(window.container.app_id, Some(String::from("Alacritty")));
+    assert_eq!(window.container.rect.x, 0);
+    assert_eq!(window.container.rect.y, 2185);
+    assert_eq!(window.container.rect.width, 2880);
+    assert_eq!(window.container.rect.height, 1775);
+
+    let second = subbed.next().await;
+    matches!(second, None);
+
+    handle.await??;
+
+    Ok(())
+}
+
+struct MockServer {
+    dir: TempDir,
+    bind_path: PathBuf,
+    handle: JoinHandle<Result<UnixStream>>,
+}
+
+fn setup_mock_server(
+    name: &str,
+    expect_recv: Vec<u8>,
+    send: Vec<u8>,
+) -> Result<MockServer> {
     let dir = Builder::new()
-        .prefix("sway-matiane-sway-")
+        .prefix(&format!("sway-matiane-{}", name))
         .rand_bytes(10)
         .tempdir()?;
-
-    let server_recv = include_bytes!("data/send01.bin");
-    let server_send = include_bytes!("data/received01-01.bin");
 
     let bind_path = dir.path().join("window-events-1.sock");
     let bind = UnixListener::bind(&bind_path)?;
 
-    let server_task = tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         let (mut stream, _addr) = bind.accept().await?;
 
-        let mut dup: Vec<u8> = vec![0; server_recv.len()];
+        let mut dup: Vec<u8> = vec![0; expect_recv.len()];
         let read_res = stream.read_exact(&mut dup).await?;
-        assert_eq!(read_res, server_recv.len());
+        assert_eq!(read_res, expect_recv.len());
+        assert_eq!(dup, expect_recv);
 
-        stream.write(server_send).await?;
-
+        stream.write(&send).await?;
         stream.shutdown().await?;
 
         Ok::<_, anyhow::Error>(stream)
     });
 
-    let mut subbed = subscribe(&bind_path, EventType::Window).await?;
-    let single_event = subbed.next().await.unwrap()?;
-
-    if let Event::Window(window) = single_event {
-        assert_eq!(window.change, WindowChange::FullscreenMode);
-        assert_eq!(window.container.id, 10);
-        assert_eq!(
-            window.container.name,
-            Some(String::from(
-                "Alacritty - dev-1 // 2 - zsh // 1 - sway-matiane/src"
-            ))
-        );
-        assert_eq!(window.container.app_id, Some(String::from("Alacritty")));
-        assert_eq!(window.container.rect.x, 0);
-        assert_eq!(window.container.rect.y, 2185);
-        assert_eq!(window.container.rect.width, 2880);
-        assert_eq!(window.container.rect.height, 1775);
-        // ...
-    } else {
-        panic!("Must return a window.");
-    }
-
-    let second = subbed.next().await;
-    matches!(second, None);
-
-    server_task.await??;
-
-    Ok(())
+    Ok(MockServer {
+        dir,
+        bind_path,
+        handle,
+    })
 }
