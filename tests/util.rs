@@ -12,7 +12,7 @@ macro_rules! raw_packet {
     };
 
     // process inputs
-    (@internal (u32_le $num:literal)$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
+    (@internal (u32_le $num:expr)$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
         raw_packet!(@internal $($($tail),*)? -> (
             $(,$($items),*)?,
             (($num & 0xff) as u8),
@@ -22,7 +22,7 @@ macro_rules! raw_packet {
         ))
     };
 
-    (@internal (u32_be $num:literal)$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
+    (@internal (u32_be $num:expr)$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
         raw_packet!(@internal $($($tail),*)? -> (
             $(,$($items),*)?,
             (($num >> 24 & 0xff) as u8),
@@ -32,7 +32,7 @@ macro_rules! raw_packet {
         ))
     };
 
-    (@internal (u32_ne $num:literal)$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
+    (@internal (u32_ne $num:expr)$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
         if cfg!(target_endian="big") {
             raw_packet!(@internal (u32_be $num)$(, $($tail),*)? -> ($(,$($items),*)?))
         } else {
@@ -86,11 +86,37 @@ macro_rules! raw_packet {
 
 #[macro_export]
 macro_rules! raw_packet_with_body {
-    (header: [$($val:tt),*], body: $body:tt) => {
+    (header: [$($val:tt),*], body: $body:expr) => {
         {
             let mut vec: Vec<u8> = raw_packet![$($val),*];
-            vec.extend_from_slice($body.as_bytes());
+            vec.extend_from_slice($body);
             vec
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! raw_subscribe_success {
+    () => {
+        {
+            let payload: &[u8] = br#"{"success":true}"#;
+            raw_packet_with_body!{
+                header: [magic, (u32_ne payload.len()), (u32_ne 2)],
+                body: payload
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! assert_sway_codec_error {
+    ($result:ident, $type:pat) => {
+        {
+            assert!($result.is_err());
+            let error = $result.unwrap_err();
+            let spec = error.downcast_ref::<SwayPacketCodecError>();
+
+            assert!(matches!(spec, Some($type)));
         }
     };
 }
