@@ -23,8 +23,10 @@ pub enum SubscribeError {
     UnsupportedEvent(u32),
     #[error("Terrible packet `{0}`.")]
     TerriblePacket(#[from] SwayPacketCodecError),
-    #[error("Not a response")]
-    NotAResponse,
+    #[error("Stream closed")]
+    Closed,
+    #[error("Bad payload")]
+    BadPayload(#[from] serde_json::Error),
 }
 
 impl TryFrom<SwayPacketRaw> for Event {
@@ -69,15 +71,14 @@ pub async fn subscribe(
     let packet = subscribe_packet(event)?;
     framer.send(packet).await?;
 
-    let response =
-        framer.next().await.ok_or(SubscribeError::NotAResponse)??;
+    let response = framer.next().await.ok_or(SubscribeError::Closed)??;
 
     if response.packet_type != (CommandType::Subscribe as u32) {
         return Err(SubscribeError::IncorrectResponseType.into());
     }
 
-    let outcome: CommandOutcome =
-        serde_json::de::from_slice(&response.payload)?;
+    let outcome: CommandOutcome = serde_json::de::from_slice(&response.payload)
+        .map_err(SubscribeError::BadPayload)?;
 
     if !outcome.success {
         return Err(

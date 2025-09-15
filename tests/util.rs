@@ -97,27 +97,23 @@ macro_rules! raw_packet_with_body {
 
 #[macro_export]
 macro_rules! raw_subscribe_success {
-    () => {
-        {
-            let payload: &[u8] = br#"{"success":true}"#;
-            raw_packet_with_body!{
-                header: [magic, (u32_ne payload.len()), (u32_ne 2)],
-                body: payload
-            }
+    () => {{
+        let payload: &[u8] = br#"{"success":true}"#;
+        raw_packet_with_body! {
+            header: [magic, (u32_ne payload.len()), (u32_ne 2)],
+            body: payload
         }
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! assert_sway_error {
-    ($result:ident, $type:ty, $pattern:pat) => {
-        {
-            assert!($result.is_err());
-            let error = $result.unwrap_err();
-            let spec = error.downcast_ref::<$type>();
-            assert!(matches!(spec, Some($pattern)));
-        }
-    }
+    ($result:ident, $type:ty, $pattern:pat) => {{
+        assert!($result.is_err());
+        let error = $result.unwrap_err();
+        let spec = error.downcast_ref::<$type>();
+        assert!(matches!(spec, Some($pattern)));
+    }};
 }
 
 #[macro_export]

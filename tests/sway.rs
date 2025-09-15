@@ -1,9 +1,10 @@
 use anyhow::Result;
 use futures::StreamExt;
+use serde_json;
 use std::path::PathBuf;
 use sway_matiane::sway::codec::SwayPacketCodecError;
 use sway_matiane::sway::command::EventType;
-use sway_matiane::sway::connection::{subscribe, SubscribeError};
+use sway_matiane::sway::connection::{SubscribeError, subscribe};
 use sway_matiane::sway::reply::{Event, WindowChange};
 use tempfile::{Builder, TempDir};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -68,12 +69,21 @@ generate_sway_bad_subscribe_tests![
     ],
     [
         sway_subscribe_bad_type,
-        raw_packet_with_body!{
+        raw_packet_with_body! {
             header: [magic, (u32_ne 2), (u32_ne 0)],
             body: br#"{}"#
         },
         SubscribeError,
         SubscribeError::IncorrectResponseType
+    ],
+    [
+        sway_subscribe_bad_payload,
+        raw_packet_with_body! {
+            header: [magic, (u32_ne 2), (u32_ne 2)],
+            body: br#"{}"#
+        },
+        SubscribeError,
+        SubscribeError::BadPayload(_)
     ]
 ];
 
