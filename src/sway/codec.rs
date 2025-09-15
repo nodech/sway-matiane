@@ -40,7 +40,7 @@ impl Decoder for SwayPacketCodec {
         let mut cursor = Cursor::new(&src[super::MAGIC_LEN..]);
         let payload_len = cursor.get_u32_ne();
 
-        if payload_len >= super::EVENT_FLAG {
+        if payload_len >= 0x80000000 {
             src.clear();
             return Err(SwayPacketCodecError::PayloadLenIncorrect);
         }

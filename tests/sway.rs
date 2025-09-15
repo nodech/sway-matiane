@@ -1,6 +1,7 @@
 use anyhow::Result;
 use futures::StreamExt;
 use std::path::PathBuf;
+use sway_matiane::sway::codec::SwayPacketCodecError;
 use sway_matiane::sway::command::EventType;
 use sway_matiane::sway::connection::subscribe;
 use sway_matiane::sway::reply::{Event, WindowChange};
@@ -8,6 +9,8 @@ use tempfile::{Builder, TempDir};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::task::JoinHandle;
+
+mod util;
 
 #[cfg(target_endian = "little")]
 #[tokio::test]
@@ -44,6 +47,68 @@ async fn sway_window_events_1() -> Result<()> {
 
     let second = subbed.next().await;
     matches!(second, None);
+
+    handle.await??;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn sway_subscribe_bad_magic() -> Result<()> {
+    let server_recv = raw_packet_with_body!{
+        header: [magic, (u32_ne 10), (u32_ne 2)],
+        body: r#"["window"]"#
+    };
+    let response = raw_packet![
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+        (u32_ne 0),
+        (u32_ne 1)
+    ];
+
+    let MockServer {
+        dir: _dir,
+        bind_path,
+        handle,
+    } = setup_mock_server("sway-subscribe-bad-magic", server_recv, response)?;
+
+    let subbed = subscribe(&bind_path, EventType::Window).await;
+    assert!(subbed.is_err());
+
+    let error = subbed.unwrap_err();
+    let spec = error.downcast_ref::<SwayPacketCodecError>();
+
+    assert!(matches!(spec, Some(SwayPacketCodecError::MagicIncorrect)));
+
+    handle.await??;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn sway_subscribe_bad_payload_len() -> Result<()> {
+    let server_recv = raw_packet_with_body!{
+        header: [magic, (u32_ne 10), (u32_ne 2)],
+        body: r#"["window"]"#
+    };
+    let response = raw_packet![
+        magic,
+        [be2ne_4 0x80, 0x00, 0x00, 0x01],
+        (u32_ne 0)
+    ];
+
+    let MockServer {
+        dir: _dir,
+        bind_path,
+        handle,
+    } = setup_mock_server("sway-subscribe-bad-payload_len", server_recv, response)?;
+
+    let subbed = subscribe(&bind_path, EventType::Window).await;
+    assert!(subbed.is_err());
+
+    let error = subbed.unwrap_err();
+    let spec = error.downcast_ref::<SwayPacketCodecError>();
+
+    assert!(matches!(spec, Some(SwayPacketCodecError::PayloadLenIncorrect)));
 
     handle.await??;
 

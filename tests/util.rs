@@ -51,7 +51,7 @@ macro_rules! raw_packet {
     };
 
     (@internal [be2ne_4 $b1:literal, $b2:literal, $b3:literal, $b4:literal]$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
-        if cfg!(target_endian="big") {
+        if cfg!(target_endian="little") {
             raw_packet!(@internal $($($tail),*)? -> (
                 $(,$($items),*)?,
                 $b4,
