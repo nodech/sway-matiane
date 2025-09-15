@@ -86,17 +86,7 @@ pub async fn subscribe(
         );
     }
 
-    let raw_event_type = (event as u32) | super::EVENT_FLAG;
-
-    Ok(framer.map(move |res| {
-        let raw = res?;
-
-        if raw.packet_type != raw_event_type {
-            return Err(SubscribeError::IncorrectResponseType.into());
-        }
-
-        Event::try_from(raw)
-    }))
+    Ok(framer.map(|res| Event::try_from(res?)))
 }
 
 #[cfg(test)]

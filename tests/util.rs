@@ -117,20 +117,6 @@ macro_rules! assert_sway_error {
 }
 
 #[macro_export]
-macro_rules! assert_sway_codec_error {
-    ($result:ident, $type:pat) => {
-        assert_sway_error!($result, SwayPacketCodecError, $type)
-    };
-}
-
-#[macro_export]
-macro_rules! assert_sway_subscribe_error {
-    ($result:ident, $type:pat) => {
-        assert_sway_error!($result, SubscribeError, $type)
-    };
-}
-
-#[macro_export]
 macro_rules! generate_sway_bad_subscribe_tests {
     ($([$name:ident, $subscribe_response:expr, $error_type:ty, $error_pat:pat]),*$(,)?) => {
         $(
@@ -160,7 +146,7 @@ macro_rules! generate_sway_bad_subscribe_tests {
 
 #[macro_export]
 macro_rules! generate_sway_bad_event_tests {
-    ($([$name:ident, $event_packet:expr, $codec_error:pat]),*$(,)?) => {
+    ($([$name:ident, $event_packet:expr, $error_type:ty, $error_apt:pat]),*$(,)?) => {
         $(
             #[tokio::test]
             async fn $name() -> Result<()> {
@@ -181,7 +167,7 @@ macro_rules! generate_sway_bad_event_tests {
                 let mut events = subscribe(&bind_path, EventType::Window).await?;
 
                 let event = events.next().await.expect("Must return something.");
-                assert_sway_codec_error!(event, $codec_error);
+                assert_sway_error!(event, $error_type, $error_apt);
 
                 handle.await??;
 

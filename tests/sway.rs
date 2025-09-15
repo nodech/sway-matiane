@@ -1,11 +1,10 @@
 use anyhow::Result;
 use futures::StreamExt;
-use serde_json;
 use std::path::PathBuf;
 use sway_matiane::sway::codec::SwayPacketCodecError;
 use sway_matiane::sway::command::EventType;
 use sway_matiane::sway::connection::{SubscribeError, subscribe};
-use sway_matiane::sway::reply::{Event, WindowChange};
+use sway_matiane::sway::reply::{CommandError, Event, WindowChange};
 use tempfile::{Builder, TempDir};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
@@ -84,19 +83,53 @@ generate_sway_bad_subscribe_tests![
         },
         SubscribeError,
         SubscribeError::BadPayload(_)
-    ]
+    ],
+    [
+        sway_subscribe_failed,
+        raw_packet_with_body! {
+            header: [magic, (u32_ne 55), (u32_ne 2)],
+            body: br#"{"success":false,"parse_error":false,"error":"failed."}"#
+        },
+        SubscribeError,
+        SubscribeError::SubscribeFailed(CommandError {
+            parse_error: false,
+            message: _,
+            ..
+        })
+    ],
 ];
 
 generate_sway_bad_event_tests![
     [
         sway_bad_event_magic,
         raw_packet![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, (u32_ne 0), (u32_ne 1)],
+        SwayPacketCodecError,
         SwayPacketCodecError::MagicIncorrect
     ],
     [
         sway_bad_event_payload_len,
         raw_packet![magic, [be2ne_4 0x80, 0x00, 0x00, 0x01], (u32_ne 0)],
+        SwayPacketCodecError,
         SwayPacketCodecError::PayloadLenIncorrect
+    ],
+    [
+        sway_bad_event_bad_response,
+        raw_packet_with_body! {
+            // event packet types start with 0x80 ...
+            header: [magic, (u32_ne 2), [be2ne_4 0x00, 0x00, 0x00, 0x00]],
+            body: br#"{}"#
+        },
+        SubscribeError,
+        SubscribeError::NotAnEvent(0)
+    ],
+    [
+        sway_bad_event_unsupported_event,
+        raw_packet_with_body! {
+            header: [magic, (u32_ne 2), [be2ne_4 0x80, 0x00, 0x00, 0x00]],
+            body: br#"{}"#
+        },
+        SubscribeError,
+        SubscribeError::UnsupportedEvent(0)
     ],
 ];
 
