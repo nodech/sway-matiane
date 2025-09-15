@@ -23,6 +23,8 @@ pub enum SubscribeError {
     UnsupportedEvent(u32),
     #[error("Terrible packet `{0}`.")]
     TerriblePacket(#[from] SwayPacketCodecError),
+    #[error("Not a response")]
+    NotAResponse,
 }
 
 impl TryFrom<SwayPacketRaw> for Event {
@@ -67,7 +69,8 @@ pub async fn subscribe(
     let packet = subscribe_packet(event)?;
     framer.send(packet).await?;
 
-    let response = framer.next().await.expect("Must receive response.")?;
+    let response =
+        framer.next().await.ok_or(SubscribeError::NotAResponse)??;
 
     if response.packet_type != (CommandType::Subscribe as u32) {
         return Err(SubscribeError::IncorrectResponseType.into());

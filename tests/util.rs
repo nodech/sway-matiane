@@ -71,7 +71,7 @@ macro_rules! raw_packet {
     };
 
     (@internal magic$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
-        raw_packet!(@internal $($($tail),*)? -> ($(,$($items),*)?, b'm', b'a', b'g', b'i', b'c'))
+        raw_packet!(@internal $($($tail),*)? -> ($(,$($items),*)?, b'i', b'3', b'-', b'i', b'p', b'c'))
     };
 
     (@internal $head:tt$(, $($tail:tt),*)? -> ($(,$($items:tt),*)?)) => {
@@ -85,7 +85,7 @@ macro_rules! raw_packet {
 }
 
 #[macro_export]
-macro_rules! raw_packet_wbody {
+macro_rules! raw_packet_with_body {
     (header: [$($val:tt),*], body: $body:tt) => {
         {
             let mut vec: Vec<u8> = raw_packet![$($val),*];

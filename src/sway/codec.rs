@@ -3,7 +3,6 @@ use std::io::Cursor;
 use thiserror::Error;
 use tokio_util::codec::{Decoder, Encoder};
 
-// use super::common;
 use super::packet::SwayPacketRaw;
 
 #[derive(Debug)]
