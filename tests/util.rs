@@ -136,7 +136,7 @@ macro_rules! assert_sway_subscribe_error {
 
 #[macro_export]
 macro_rules! generate_sway_bad_subscribe_tests {
-    ($([$name:ident, $event_packet:expr, $error_type:ty, $error_pat:pat]),*$(,)?) => {
+    ($([$name:ident, $subscribe_response:expr, $error_type:ty, $error_pat:pat]),*$(,)?) => {
         $(
             #[tokio::test]
             async fn $name() -> Result<()> {
@@ -149,7 +149,7 @@ macro_rules! generate_sway_bad_subscribe_tests {
                     dir: _dir,
                     bind_path,
                     handle,
-                } = setup_mock_server("sway-subscribe-bad-payload-len", server_recv, $event_packet)?;
+                } = setup_mock_server(stringify!($name), server_recv, $subscribe_response)?;
 
                 let subbed = subscribe(&bind_path, EventType::Window).await;
                 assert_sway_error!(subbed, $error_type, $error_pat);
