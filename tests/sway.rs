@@ -3,7 +3,7 @@ use futures::StreamExt;
 use std::path::PathBuf;
 use sway_matiane::sway::codec::SwayPacketCodecError;
 use sway_matiane::sway::command::EventType;
-use sway_matiane::sway::connection::subscribe;
+use sway_matiane::sway::connection::{subscribe, SubscribeError};
 use sway_matiane::sway::reply::{Event, WindowChange};
 use tempfile::{Builder, TempDir};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -53,122 +53,42 @@ async fn sway_window_events_1() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn sway_subscribe_bad_magic() -> Result<()> {
-    let server_recv = raw_packet_with_body!{
-        header: [magic, (u32_ne 10), (u32_ne 2)],
-        body: r#"["window"]"#.as_bytes()
-    };
-    let response = raw_packet![
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-        (u32_ne 0),
-        (u32_ne 1)
-    ];
+generate_sway_bad_subscribe_tests![
+    [
+        sway_subscribe_bad_magic,
+        raw_packet![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, (u32_ne 0), (u32_ne 1)],
+        SwayPacketCodecError,
+        SwayPacketCodecError::MagicIncorrect
+    ],
+    [
+        sway_subscribe_bad_payload_len,
+        raw_packet![magic, [be2ne_4 0x80, 0x00, 0x00, 0x01], (u32_ne 0)],
+        SwayPacketCodecError,
+        SwayPacketCodecError::PayloadLenIncorrect
+    ],
+    [
+        sway_subscribe_bad_type,
+        raw_packet_with_body!{
+            header: [magic, (u32_ne 2), (u32_ne 0)],
+            body: br#"{}"#
+        },
+        SubscribeError,
+        SubscribeError::IncorrectResponseType
+    ]
+];
 
-    let MockServer {
-        dir: _dir,
-        bind_path,
-        handle,
-    } = setup_mock_server("sway-subscribe-bad-magic", server_recv, response)?;
-
-    let subbed = subscribe(&bind_path, EventType::Window).await;
-    assert_sway_codec_error!(subbed, SwayPacketCodecError::MagicIncorrect);
-
-    handle.await??;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn sway_subscribe_bad_payload_len() -> Result<()> {
-    let server_recv = raw_packet_with_body!{
-        header: [magic, (u32_ne 10), (u32_ne 2)],
-        body: r#"["window"]"#.as_bytes()
-    };
-    let response = raw_packet![
-        magic,
-        [be2ne_4 0x80, 0x00, 0x00, 0x01],
-        (u32_ne 0)
-    ];
-
-    let MockServer {
-        dir: _dir,
-        bind_path,
-        handle,
-    } = setup_mock_server("sway-subscribe-bad-payload_len", server_recv, response)?;
-
-    let subbed = subscribe(&bind_path, EventType::Window).await;
-    assert_sway_codec_error!(subbed, SwayPacketCodecError::PayloadLenIncorrect);
-
-    handle.await??;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn sway_bad_event_magic() -> Result<()> {
-    let server_recv = raw_packet_with_body!{
-        header: [magic, (u32_ne 10), (u32_ne 2)],
-        body: r#"["window"]"#.as_bytes()
-    };
-
-    let sub_success = raw_subscribe_success!();
-    let bad_magic_packet = raw_packet![
-        0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-        (u32_ne 0),
-        (u32_ne 1)
-    ];
-
-    let response = [sub_success, bad_magic_packet].concat();
-
-    let MockServer {
-        dir: _dir,
-        bind_path,
-        handle,
-    } = setup_mock_server("sway-event-bad-magic", server_recv, response)?;
-
-    let mut events = subscribe(&bind_path, EventType::Window).await?;
-
-    let event = events.next().await.expect("Must return something.");
-    assert_sway_codec_error!(event, SwayPacketCodecError::MagicIncorrect);
-
-    handle.await??;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn sway_bad_event_payload_len() -> Result<()> {
-    let server_recv = raw_packet_with_body!{
-        header: [magic, (u32_ne 10), (u32_ne 2)],
-        body: r#"["window"]"#.as_bytes()
-    };
-
-    let sub_success = raw_subscribe_success!();
-    let bad_magic_packet = raw_packet![
-        magic,
-        [be2ne_4 0x80, 0x00, 0x00, 0x01],
-        (u32_ne 0)
-    ];
-
-    let response = [sub_success, bad_magic_packet].concat();
-
-    let MockServer {
-        dir: _dir,
-        bind_path,
-        handle,
-    } = setup_mock_server("sway-event-bad-magic", server_recv, response)?;
-
-    let mut events = subscribe(&bind_path, EventType::Window).await?;
-
-    let event = events.next().await.expect("Must return something.");
-
-    assert_sway_codec_error!(event, SwayPacketCodecError::PayloadLenIncorrect);
-
-    handle.await??;
-
-    Ok(())
-}
+generate_sway_bad_event_tests![
+    [
+        sway_bad_event_magic,
+        raw_packet![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, (u32_ne 0), (u32_ne 1)],
+        SwayPacketCodecError::MagicIncorrect
+    ],
+    [
+        sway_bad_event_payload_len,
+        raw_packet![magic, [be2ne_4 0x80, 0x00, 0x00, 0x01], (u32_ne 0)],
+        SwayPacketCodecError::PayloadLenIncorrect
+    ],
+];
 
 struct MockServer {
     dir: TempDir,

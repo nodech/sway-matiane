@@ -109,14 +109,88 @@ macro_rules! raw_subscribe_success {
 }
 
 #[macro_export]
-macro_rules! assert_sway_codec_error {
-    ($result:ident, $type:pat) => {
+macro_rules! assert_sway_error {
+    ($result:ident, $type:ty, $pattern:pat) => {
         {
             assert!($result.is_err());
             let error = $result.unwrap_err();
-            let spec = error.downcast_ref::<SwayPacketCodecError>();
-
-            assert!(matches!(spec, Some($type)));
+            let spec = error.downcast_ref::<$type>();
+            assert!(matches!(spec, Some($pattern)));
         }
+    }
+}
+
+#[macro_export]
+macro_rules! assert_sway_codec_error {
+    ($result:ident, $type:pat) => {
+        assert_sway_error!($result, SwayPacketCodecError, $type)
+    };
+}
+
+#[macro_export]
+macro_rules! assert_sway_subscribe_error {
+    ($result:ident, $type:pat) => {
+        assert_sway_error!($result, SubscribeError, $type)
+    };
+}
+
+#[macro_export]
+macro_rules! generate_sway_bad_subscribe_tests {
+    ($([$name:ident, $event_packet:expr, $error_type:ty, $error_pat:pat]),*$(,)?) => {
+        $(
+            #[tokio::test]
+            async fn $name() -> Result<()> {
+                let server_recv = raw_packet_with_body!{
+                    header: [magic, (u32_ne 10), (u32_ne 2)],
+                    body: br#"["window"]"#
+                };
+
+                let MockServer {
+                    dir: _dir,
+                    bind_path,
+                    handle,
+                } = setup_mock_server("sway-subscribe-bad-payload-len", server_recv, $event_packet)?;
+
+                let subbed = subscribe(&bind_path, EventType::Window).await;
+                assert_sway_error!(subbed, $error_type, $error_pat);
+
+                handle.await??;
+
+                Ok(())
+            }
+        )*
+    };
+}
+
+#[macro_export]
+macro_rules! generate_sway_bad_event_tests {
+    ($([$name:ident, $event_packet:expr, $codec_error:pat]),*$(,)?) => {
+        $(
+            #[tokio::test]
+            async fn $name() -> Result<()> {
+                let server_recv = raw_packet_with_body!{
+                    header: [magic, (u32_ne 10), (u32_ne 2)],
+                    body: br#"["window"]"#
+                };
+
+                let sub_success = raw_subscribe_success!();
+                let response = [sub_success, $event_packet].concat();
+
+                let MockServer {
+                    dir: _dir,
+                    bind_path,
+                    handle,
+                } = setup_mock_server(stringify!($name), server_recv, response)?;
+
+                let mut events = subscribe(&bind_path, EventType::Window).await?;
+
+                let event = events.next().await.expect("Must return something.");
+                assert_sway_codec_error!(event, $codec_error);
+
+                handle.await??;
+
+                Ok(())
+            }
+        )*
     };
 }
