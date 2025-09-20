@@ -1,3 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["sway-matiane"]
+members = ["sway-matiane", "matiane-core"]
+
+[workspace.dependencies]
+matiane-core = { path = "matiane-core" }
+serde = { version = "1.0.219", features = ["derive"] }
+anyhow = "1.0.98"
