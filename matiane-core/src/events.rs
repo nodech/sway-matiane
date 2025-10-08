@@ -1,0 +1,30 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Focused {
+    pub name: String,
+    pub id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type", content = "data")]
+pub enum Event {
+    Focused(Box<Focused>),
+    /// An interval liveness check
+    Alive,
+    /// swaylock: Screen is now locked
+    Lock,
+    /// swaylock: Screen is now unlocked
+    Unlock,
+    /// swayidle: Went to idle state
+    Idle,
+    /// swayidle: Back to active state
+    Active,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TimedEvent {
+    pub timestamp: DateTime<Utc>,
+    pub event: Event,
+}

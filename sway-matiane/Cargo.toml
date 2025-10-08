@@ -15,16 +15,16 @@ path = "src/main.rs"
 anyhow.workspace = true
 bytes = "1.10.1"
 clap = { version = "4.5.43", features = ["cargo"] }
-futures = "0.3.31"
+futures.workspace = true
 matiane-core.workspace = true
 serde.workspace = true
-serde_json = "1.0.143"
-thiserror = "2.0.16"
-tokio = { version = "1.47.1", features = ["full"] }
-tokio-test = "0.4.4"
-tokio-util = { version = "0.7.16", features = ["codec"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio-test.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
 toml = "0.9.7"
 
 [dev-dependencies]
-tempfile = "3.21.0"
+tempfile.workspace = true
 tokio-test = "0.4.4"
