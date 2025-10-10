@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Focused {
-    pub name: String,
+    pub title: String,
     pub id: String,
+    pub pid: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

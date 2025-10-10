@@ -9,9 +9,9 @@ use tokio::io::AsyncWriteExt;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
-    #[error("IO Error: {0}")]
+    #[error("Store IO Error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("Failed to encode event")]
+    #[error("Store failed to encode event")]
     EncodeError(#[from] serde_json::Error),
 }
 
@@ -28,6 +28,13 @@ impl EventWriter {
     ) -> Result<Self, StoreError> {
         let filename = get_filename_by_date(date.date_naive());
         let filepath = dir.join(filename);
+
+        let dir_exists = tokio::fs::try_exists(&dir).await?;
+
+        if !dir_exists {
+            tokio::fs::create_dir(&dir).await?;
+        }
+
         let file = open_write_file(filepath).await?;
 
         let store = EventWriter {

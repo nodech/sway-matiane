@@ -455,6 +455,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "futures",
+ "log",
  "serde",
  "serde_json",
  "tempfile",
@@ -724,8 +725,10 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "bytes",
+ "chrono",
  "clap",
  "futures",
+ "log",
  "matiane-core",
  "serde",
  "serde_json",
