@@ -127,8 +127,9 @@ async fn store_write_several_events() -> Result<()> {
             event: TimedEvent {
                 timestamp: Utc.with_ymd_and_hms(2025, 01, 01, 0, 0, 5).unwrap(),
                 event: Event::Focused(Box::new(Focused {
-                    name: "This-is-title".to_string(),
+                    title: "This-is-title".to_string(),
                     id: "Program".to_string(),
+                    pid: 111,
                 })),
             },
             expected: r#"
@@ -137,8 +138,9 @@ async fn store_write_several_events() -> Result<()> {
                 "event": {
                     "type": "focused",
                     "data": {
-                        "name": "This-is-title",
-                        "id": "Program"
+                        "title": "This-is-title",
+                        "id": "Program",
+                        "pid": 111
                     }
                 }
             }

@@ -15,7 +15,7 @@ impl Default for SwayMatianeConfig {
     fn default() -> Self {
         Self {
             state_dir: xdg::data_dir(Some(crate::NAME)),
-            live_interval: LIVE_INTERVAL
+            live_interval: LIVE_INTERVAL,
         }
     }
 }

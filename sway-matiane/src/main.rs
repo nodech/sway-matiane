@@ -1,17 +1,21 @@
 use anyhow::{Context, Result};
-use clap::{arg, command, value_parser, builder::{PossibleValuesParser, TypedValueParser}};
-use matiane_core::xdg::Xdg;
-use matiane_core::store::EventWriter;
-use matiane_core::events::{TimedEvent, Event};
-use matiane_core::log::LoggerBuilder;
-use sway_matiane::sway::connection::subscribe;
-use sway_matiane::sway::command::EventType;
-use std::path::PathBuf;
 use chrono::Utc;
+use clap::{
+    arg,
+    builder::{PossibleValuesParser, TypedValueParser},
+    command, value_parser,
+};
 use futures::StreamExt;
-use tokio::time::{interval, MissedTickBehavior};
-use log::{info, trace, warn, debug, LevelFilter};
+use log::{LevelFilter, debug, info, trace, warn};
+use matiane_core::events::{Event, TimedEvent};
+use matiane_core::log::LoggerBuilder;
+use matiane_core::store::EventWriter;
+use matiane_core::xdg::Xdg;
+use std::path::PathBuf;
 use std::str::FromStr;
+use sway_matiane::sway::command::EventType;
+use sway_matiane::sway::connection::subscribe;
+use tokio::time::{MissedTickBehavior, interval};
 
 mod config;
 
@@ -89,7 +93,7 @@ struct ParsedArgs {
 }
 
 fn parse_args(xdg: &Xdg) -> ParsedArgs {
-    let possible_levels: Vec<_> = 
+    let possible_levels: Vec<_> =
         LevelFilter::iter().map(|v| v.as_str()).collect();
 
     let matches = command!("Sway matiane logger")
