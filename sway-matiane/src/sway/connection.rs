@@ -1,9 +1,9 @@
 use super::codec::{SwayPacketCodec, SwayPacketCodecError};
-use super::command::{CommandType, EventType};
+use super::command::{CommandType, CommandTypeError, EventType};
 use super::packet::SwayPacketRaw;
 use super::reply::{CommandOutcome, Event};
-use anyhow::Result;
 use futures::{SinkExt, StreamExt};
+use log::debug;
 use serde_json;
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -13,6 +13,8 @@ use tokio_util::codec::Framed;
 
 #[derive(Debug, Error)]
 pub enum SubscribeError {
+    #[error("IO Error: {0}")]
+    Io(#[from] std::io::Error),
     #[error("Incorrect response type.")]
     IncorrectResponseType,
     #[error("Subscribe command failed.")]
@@ -27,14 +29,16 @@ pub enum SubscribeError {
     Closed,
     #[error("Bad payload")]
     BadPayload(#[from] serde_json::Error),
+    #[error("Bad command type: {0}")]
+    BadCommand(#[from] CommandTypeError),
 }
 
 impl TryFrom<SwayPacketRaw> for Event {
-    type Error = anyhow::Error;
+    type Error = SubscribeError;
 
-    fn try_from(packet: SwayPacketRaw) -> Result<Event> {
+    fn try_from(packet: SwayPacketRaw) -> Result<Event, SubscribeError> {
         if (packet.packet_type & super::EVENT_FLAG) != super::EVENT_FLAG {
-            return Err(SubscribeError::NotAnEvent(packet.packet_type).into());
+            return Err(SubscribeError::NotAnEvent(packet.packet_type));
         }
 
         let event_type =
@@ -44,14 +48,12 @@ impl TryFrom<SwayPacketRaw> for Event {
             EventType::Window => {
                 Ok(Event::Window(serde_json::from_slice(&packet.payload)?))
             }
-            _ => {
-                Err(SubscribeError::UnsupportedEvent(event_type as u32).into())
-            }
+            _ => Err(SubscribeError::UnsupportedEvent(event_type as u32)),
         }
     }
 }
 
-fn subscribe_packet(event: EventType) -> Result<SwayPacketRaw> {
+fn subscribe_packet(event: EventType) -> Result<SwayPacketRaw, SubscribeError> {
     let events = [event];
     let encoded = serde_json::ser::to_string(&events)?;
 
@@ -64,28 +66,34 @@ fn subscribe_packet(event: EventType) -> Result<SwayPacketRaw> {
 pub async fn subscribe(
     path: &PathBuf,
     event: EventType,
-) -> Result<impl Debug + StreamExt<Item = Result<Event, anyhow::Error>>> {
+) -> Result<
+    impl Debug + StreamExt<Item = Result<Event, SubscribeError>>,
+    SubscribeError,
+> {
+    debug!("Connecting to {:?}", path);
     let socket = UnixStream::connect(path).await?;
+    debug!("Connected to {:?}.", path);
+
     let mut framer = Framed::new(socket, SwayPacketCodec);
 
+    debug!("Subscribing to events: {:?}", event);
     let packet = subscribe_packet(event)?;
     framer.send(packet).await?;
 
     let response = framer.next().await.ok_or(SubscribeError::Closed)??;
 
     if response.packet_type != (CommandType::Subscribe as u32) {
-        return Err(SubscribeError::IncorrectResponseType.into());
+        return Err(SubscribeError::IncorrectResponseType);
     }
 
     let outcome: CommandOutcome = serde_json::de::from_slice(&response.payload)
         .map_err(SubscribeError::BadPayload)?;
 
     if !outcome.success {
-        return Err(
-            SubscribeError::SubscribeFailed(outcome.error.unwrap()).into()
-        );
+        return Err(SubscribeError::SubscribeFailed(outcome.error.unwrap()));
     }
 
+    debug!("Subscribed to events: {:?}.", event);
     Ok(framer.map(|res| Event::try_from(res?)))
 }
 
@@ -94,7 +102,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn subscribe_packet_test() -> Result<()> {
+    fn subscribe_packet_test() -> anyhow::Result<()> {
         let packet = EventType::Window;
 
         subscribe_packet(packet)?;
