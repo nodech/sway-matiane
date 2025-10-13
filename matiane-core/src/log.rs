@@ -5,6 +5,7 @@ pub struct Logger {
     level: LevelFilter,
     stderr: bool,
     stdout: bool,
+    thread: bool,
 }
 
 impl Log for Logger {
@@ -17,16 +18,31 @@ impl Log for Logger {
             return;
         }
 
-        let timestamp = Local::now();
-        let level = record.level();
+        let timestamp =
+            Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+        let level = format!("[{}]", record.level());
         let target = if !record.target().is_empty() {
-            record.target()
+            format!("comp={} ", record.target())
         } else {
-            record.module_path().unwrap_or_default()
+            format!("comp={} ", record.module_path().unwrap_or_default())
         };
 
-        let formatted =
-            format!("{} [{}] ({}) {}", timestamp, level, target, record.args());
+        let thread = if self.thread {
+            let thread = std::thread::current();
+            let name = thread.name().unwrap_or("?");
+            format!("t={} ", name)
+        } else {
+            "".to_string()
+        };
+
+        let formatted = format!(
+            "{} {:<7} {}{} {}",
+            timestamp,
+            level,
+            thread,
+            target,
+            record.args()
+        );
 
         if self.stderr {
             eprintln!("{}", formatted);
@@ -44,6 +60,7 @@ pub struct LoggerBuilder {
     level: LevelFilter,
     stderr: bool,
     stdout: bool,
+    thread: bool,
 }
 
 impl Default for LoggerBuilder {
@@ -52,6 +69,7 @@ impl Default for LoggerBuilder {
             level: LevelFilter::Off,
             stderr: false,
             stdout: false,
+            thread: false,
         }
     }
 }
@@ -76,11 +94,17 @@ impl LoggerBuilder {
         self
     }
 
+    pub fn with_threads(mut self, enabled: bool) -> Self {
+        self.thread = enabled;
+        self
+    }
+
     pub fn build(self) -> Logger {
         Logger {
             level: self.level,
             stderr: self.stderr,
             stdout: self.stdout,
+            thread: self.thread,
         }
     }
 }

@@ -13,11 +13,12 @@ use matiane_core::store::EventWriter;
 use matiane_core::xdg::Xdg;
 use std::path::PathBuf;
 use std::str::FromStr;
-use sway_matiane::sway::command::EventType;
-use sway_matiane::sway::connection::subscribe;
 use tokio::time::{MissedTickBehavior, interval};
 
 mod config;
+mod sway;
+
+use sway::{command::EventType, connection::subscribe};
 
 pub const NAME: &str = "mematiane";
 
@@ -143,6 +144,7 @@ fn init_logger(level: LevelFilter) -> Result<()> {
     let logger = LoggerBuilder::new()
         .with_level(level)
         .to_stderr(true)
+        .with_threads(true)
         .build();
 
     log::set_boxed_logger(Box::new(logger))?;
