@@ -57,14 +57,14 @@ generate_sway_bad_subscribe_tests![
     [
         sway_subscribe_bad_magic,
         raw_packet![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, (u32_ne 0), (u32_ne 1)],
-        SwayPacketCodecError,
-        SwayPacketCodecError::MagicIncorrect
+        SubscribeError::TerriblePacket(SwayPacketCodecError::MagicIncorrect),
     ],
     [
         sway_subscribe_bad_payload_len,
         raw_packet![magic, [be2ne_4 0x80, 0x00, 0x00, 0x01], (u32_ne 0)],
-        SwayPacketCodecError,
-        SwayPacketCodecError::PayloadLenIncorrect
+        SubscribeError::TerriblePacket(
+            SwayPacketCodecError::PayloadLenIncorrect
+        ),
     ],
     [
         sway_subscribe_bad_type,
@@ -72,8 +72,7 @@ generate_sway_bad_subscribe_tests![
             header: [magic, (u32_ne 2), (u32_ne 0)],
             body: br#"{}"#
         },
-        SubscribeError,
-        SubscribeError::IncorrectResponseType
+        SubscribeError::IncorrectResponseType,
     ],
     [
         sway_subscribe_bad_payload,
@@ -81,8 +80,7 @@ generate_sway_bad_subscribe_tests![
             header: [magic, (u32_ne 2), (u32_ne 2)],
             body: br#"{}"#
         },
-        SubscribeError,
-        SubscribeError::BadPayload(_)
+        SubscribeError::BadPayload(_),
     ],
     [
         sway_subscribe_failed,
@@ -90,12 +88,11 @@ generate_sway_bad_subscribe_tests![
             header: [magic, (u32_ne 55), (u32_ne 2)],
             body: br#"{"success":false,"parse_error":false,"error":"failed."}"#
         },
-        SubscribeError,
         SubscribeError::SubscribeFailed(CommandError {
             parse_error: false,
             message: _,
             ..
-        })
+        }),
     ],
 ];
 
@@ -103,14 +100,14 @@ generate_sway_bad_event_tests![
     [
         sway_bad_event_magic,
         raw_packet![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, (u32_ne 0), (u32_ne 1)],
-        SwayPacketCodecError,
-        SwayPacketCodecError::MagicIncorrect
+        SubscribeError::TerriblePacket(SwayPacketCodecError::MagicIncorrect),
     ],
     [
         sway_bad_event_payload_len,
         raw_packet![magic, [be2ne_4 0x80, 0x00, 0x00, 0x01], (u32_ne 0)],
-        SwayPacketCodecError,
-        SwayPacketCodecError::PayloadLenIncorrect
+        SubscribeError::TerriblePacket(
+            SwayPacketCodecError::PayloadLenIncorrect
+        ),
     ],
     [
         sway_bad_event_bad_response,
@@ -119,8 +116,7 @@ generate_sway_bad_event_tests![
             header: [magic, (u32_ne 2), [be2ne_4 0x00, 0x00, 0x00, 0x00]],
             body: br#"{}"#
         },
-        SubscribeError,
-        SubscribeError::NotAnEvent(0)
+        SubscribeError::NotAnEvent(0),
     ],
     [
         sway_bad_event_unsupported_event,
@@ -128,8 +124,7 @@ generate_sway_bad_event_tests![
             header: [magic, (u32_ne 2), [be2ne_4 0x80, 0x00, 0x00, 0x00]],
             body: br#"{}"#
         },
-        SubscribeError,
-        SubscribeError::UnsupportedEvent(0)
+        SubscribeError::UnsupportedEvent(0),
     ],
 ];
 

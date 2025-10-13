@@ -35,6 +35,7 @@ impl EventWriter {
             tokio::fs::create_dir(&dir).await?;
         }
 
+        log::debug!("opening log file: {:?}", filepath);
         let file = open_write_file(filepath).await?;
 
         let store = EventWriter {
@@ -54,6 +55,7 @@ impl EventWriter {
 
         let mut encoded = serde_json::to_vec(&event)?;
         encoded.push(b'\n');
+
         self.file.write_all(&encoded).await?;
 
         Ok(())
@@ -73,6 +75,7 @@ impl EventWriter {
 
         let filename = get_filename_by_date(date);
         let filepath = self.dir.join(filename);
+        log::debug!("Rotating file: {:?}", filepath);
         let file = open_write_file(filepath).await?;
 
         self.flush().await?;

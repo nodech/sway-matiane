@@ -5,26 +5,24 @@ use clap::{
     builder::{PossibleValuesParser, TypedValueParser},
     command, value_parser,
 };
-use futures::StreamExt;
-use log::{LevelFilter, debug, info, trace, warn};
-use matiane_core::events::{Event, TimedEvent};
+use futures::{StreamExt, future::ready};
+use log::{LevelFilter, debug, error, info, trace, warn};
+use matiane_core::events::{Event, Focused, TimedEvent};
 use matiane_core::log::LoggerBuilder;
 use matiane_core::store::EventWriter;
 use matiane_core::xdg::Xdg;
 use std::path::PathBuf;
 use std::str::FromStr;
+use sway_matiane::{config, sway};
 use tokio::time::{MissedTickBehavior, interval};
 
-mod config;
-mod sway;
-
-use sway::{command::EventType, connection::subscribe};
-
-pub const NAME: &str = "mematiane";
+use sway::{
+    command::EventType, connection::subscribe, reply::Event as SwayEvent,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let xdg = Xdg::new(NAME.into());
+    let xdg = Xdg::new(sway_matiane::NAME.into());
 
     let ParsedArgs {
         config_file,
@@ -33,7 +31,7 @@ async fn main() -> Result<()> {
 
     init_logger(log_level)?;
 
-    debug!("Loading config");
+    debug!("Loading config...");
     let cfg = load_config(&config_file).await?;
 
     let swaysock_path: PathBuf = std::env::var("SWAYSOCK")
@@ -42,48 +40,82 @@ async fn main() -> Result<()> {
 
     let state_dir = cfg.state_dir;
     let now = Utc::now();
-    debug!("Opening store");
+    debug!("Opening store...");
     let mut write_store = EventWriter::open(state_dir, now).await?;
 
-    debug!("Opening swaysocket");
-    let mut events = subscribe(&swaysock_path, EventType::Window).await?;
+    debug!("Opening swaysocket...");
+    let events = subscribe(&swaysock_path, EventType::Window).await?;
     let mut alive_interval = interval(cfg.live_interval);
     alive_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-    info!("Mematiane has started");
+    info!("Mematiane has started!");
 
-    let mut mematiene_events = events;
+    // Transform sway event into matiane event.
+    let mut mematiene_events = events
+        .filter(|event| match event {
+            Ok(SwayEvent::Window(_)) => ready(true),
+            Ok(_) => ready(false),
+            Err(err) => {
+                warn!("Sway event returned an error {:?}", err);
+                ready(false)
+            }
+        })
+        .map(|event| {
+            let SwayEvent::Window(mut win_event) = event? else {
+                // must not happen, maybe rewrite to return concrete type?
+                return Err(anyhow::anyhow!("Incorrect sway event type!"));
+            };
+
+            let app_id = win_event.container.app_id.take().or_else(|| {
+                let win_props = win_event.container.window_properties.take()?;
+                win_props.instance.or(win_props.class)
+            });
+
+            let title =
+                win_event.container.name.take().or_else(|| app_id.clone());
+            let pid = win_event.container.pid.unwrap_or(0);
+
+            let matiane_event = Box::new(Focused {
+                title: title.unwrap_or_else(|| "title-not-found".to_string()),
+                id: app_id.unwrap_or_else(|| "app-id-not-found".to_string()),
+                pid,
+            });
+
+            Ok::<Event, anyhow::Error>(Event::Focused(matiane_event))
+        });
 
     loop {
         tokio::select! {
             event = mematiene_events.next() => {
                 match event {
-                    Some(event) => {
-                        trace!("Received an event");
-                        println!("Receved events: {:?}", event);
+                    Some(Ok(event)) => {
+                        trace!("Received an event.");
+                        write_store.write(&timed_event(event)).await?;
+                    }
+                    Some(Err(err)) => {
+                        error!("Received errored event: {:?}", err);
+                        break;
                     },
                     None => {
-                        info!("Sway sock has closed");
+                        error!("Sway socket has been closed.");
+                        break;
                     },
                 };
             },
 
             _ = alive_interval.tick() => {
-                let timed = TimedEvent {
-                    timestamp: Utc::now(),
-                    event: Event::Alive,
-                };
-
-                trace!("Alive tick");
-                write_store.write(&timed).await?;
+                trace!("Live tick.");
+                write_store.write(&timed_event(Event::Alive)).await?;
             },
 
             _ = tokio::signal::ctrl_c() => {
-                debug!("CTRL-C detected, closing");
+                debug!("CTRL-C detected!");
                 break;
             },
         }
     }
+
+    debug!("Closing matiane...");
 
     Ok(())
 }
@@ -150,4 +182,11 @@ fn init_logger(level: LevelFilter) -> Result<()> {
     log::set_boxed_logger(Box::new(logger))?;
     log::set_max_level(level);
     Ok(())
+}
+
+fn timed_event(event: Event) -> TimedEvent {
+    TimedEvent {
+        timestamp: Utc::now(),
+        event,
+    }
 }

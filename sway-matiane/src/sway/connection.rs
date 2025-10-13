@@ -70,13 +70,13 @@ pub async fn subscribe(
     impl Debug + StreamExt<Item = Result<Event, SubscribeError>>,
     SubscribeError,
 > {
-    debug!("Connecting to {:?}", path);
+    debug!("Connecting to {:?}...", path);
     let socket = UnixStream::connect(path).await?;
     debug!("Connected to {:?}.", path);
 
     let mut framer = Framed::new(socket, SwayPacketCodec);
 
-    debug!("Subscribing to events: {:?}", event);
+    debug!("Subscribing to events: {:?}...", event);
     let packet = subscribe_packet(event)?;
     framer.send(packet).await?;
 

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct Focused {
     pub title: String,
     pub id: String,
-    pub pid: u32,
+    pub pid: i32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

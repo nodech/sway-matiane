@@ -107,18 +107,8 @@ macro_rules! raw_subscribe_success {
 }
 
 #[macro_export]
-macro_rules! assert_sway_error {
-    ($result:ident, $type:ty, $pattern:pat) => {{
-        assert!($result.is_err());
-        let error = $result.unwrap_err();
-        let spec = error.downcast_ref::<$type>();
-        assert!(matches!(spec, Some($pattern)));
-    }};
-}
-
-#[macro_export]
 macro_rules! generate_sway_bad_subscribe_tests {
-    ($([$name:ident, $subscribe_response:expr, $error_type:ty, $error_pat:pat]),*$(,)?) => {
+    ($([$name:ident, $subscribe_response:expr, $error_pat:pat$(,)?]),*$(,)?) => {
         $(
             #[tokio::test]
             async fn $name() -> Result<()> {
@@ -134,7 +124,9 @@ macro_rules! generate_sway_bad_subscribe_tests {
                 } = setup_mock_server(stringify!($name), server_recv, $subscribe_response)?;
 
                 let subbed = subscribe(&bind_path, EventType::Window).await;
-                assert_sway_error!(subbed, $error_type, $error_pat);
+                assert!(subbed.is_err());
+                let error = subbed.unwrap_err();
+                assert!(matches!(error, $error_pat));
 
                 handle.await??;
 
@@ -146,7 +138,7 @@ macro_rules! generate_sway_bad_subscribe_tests {
 
 #[macro_export]
 macro_rules! generate_sway_bad_event_tests {
-    ($([$name:ident, $event_packet:expr, $error_type:ty, $error_apt:pat]),*$(,)?) => {
+    ($([$name:ident, $event_packet:expr, $error_pat:pat$(,)?]),*$(,)?) => {
         $(
             #[tokio::test]
             async fn $name() -> Result<()> {
@@ -167,7 +159,9 @@ macro_rules! generate_sway_bad_event_tests {
                 let mut events = subscribe(&bind_path, EventType::Window).await?;
 
                 let event = events.next().await.expect("Must return something.");
-                assert_sway_error!(event, $error_type, $error_apt);
+                assert!(event.is_err());
+                let error = event.unwrap_err();
+                assert!(matches!(error, $error_pat));
 
                 handle.await??;
 
