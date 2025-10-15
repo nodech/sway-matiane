@@ -1,3 +1,4 @@
+use anyhow::Result;
 use matiane_core::process::{
     AlwaysCommandOptions, RunningHandle, run_always_command,
 };
@@ -23,14 +24,20 @@ impl SwayIdle {
         self
     }
 
-    pub fn spawn(self, cancel: CancellationToken) -> RunningHandle {
+    pub fn spawn(self, cancel: CancellationToken) -> Result<RunningHandle> {
         let opts = AlwaysCommandOptions {
             name: "swayidle".to_string(),
             args: self.args,
             restart_delay: Duration::from_millis(100),
         };
 
-        run_always_command(opts, cancel)
+        if opts.args.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Can not run swayidle with zero args!"
+            ));
+        }
+
+        Ok(run_always_command(opts, cancel))
     }
 }
 

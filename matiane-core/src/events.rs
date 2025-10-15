@@ -14,9 +14,9 @@ pub enum Event {
     Focused(Box<Focused>),
     /// An interval liveness check
     Alive,
-    /// swaylock: Screen is now locked
+    /// swaylock: Screen is now locked or asleep
     Lock,
-    /// swaylock: Screen is now unlocked
+    /// swaylock: Screen is now unlocked or awake
     Unlock,
     /// swayidle: Went to idle state
     Idle,

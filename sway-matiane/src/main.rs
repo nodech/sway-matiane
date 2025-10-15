@@ -1,3 +1,4 @@
+#![cfg(target_os = "linux")]
 use anyhow::{Context, Result};
 use chrono::Utc;
 use clap::{
@@ -9,12 +10,15 @@ use futures::{StreamExt, future::ready};
 use log::{LevelFilter, debug, error, info, trace, warn};
 use matiane_core::events::{Event, Focused, TimedEvent};
 use matiane_core::log::LoggerBuilder;
+use matiane_core::process::RunningHandle;
 use matiane_core::store::EventWriter;
 use matiane_core::xdg::Xdg;
 use std::path::PathBuf;
 use std::str::FromStr;
-use sway_matiane::{config, sway};
+use sway_matiane::{config, sway, swayidle};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio::time::{MissedTickBehavior, interval};
+use tokio_util::sync::CancellationToken;
 
 use sway::{
     command::EventType, connection::subscribe, reply::Event as SwayEvent,
@@ -42,6 +46,11 @@ async fn main() -> Result<()> {
     let now = Utc::now();
     debug!("Opening store...");
     let mut write_store = EventWriter::open(state_dir, now).await?;
+
+    debug!("Running swayidle...");
+    let cancel_swayidle = CancellationToken::new();
+    let idle_timeout = 60;
+    let sway_idle = run_swayidle(idle_timeout, cancel_swayidle.clone())?;
 
     debug!("Opening swaysocket...");
     let events = subscribe(&swaysock_path, EventType::Window).await?;
@@ -84,6 +93,11 @@ async fn main() -> Result<()> {
             Ok::<Event, anyhow::Error>(Event::Focused(matiane_event))
         });
 
+    let mut sigusr1 = signal(SignalKind::user_defined1())?;
+    let mut sigusr2 = signal(SignalKind::user_defined2())?;
+    let mut idle = signal(SignalKind::from_raw(libc::SIGRTMIN() + 1))?;
+    let mut resume = signal(SignalKind::from_raw(libc::SIGRTMIN() + 2))?;
+
     loop {
         tokio::select! {
             event = mematiene_events.next() => {
@@ -108,14 +122,36 @@ async fn main() -> Result<()> {
                 write_store.write(&timed_event(Event::Alive)).await?;
             },
 
+            _ = sigusr1.recv() => {
+                debug!("Sleeping or locking...");
+                write_store.write(&timed_event(Event::Lock)).await?;
+            },
+
+            _ = sigusr2.recv() => {
+                debug!("Waking up or unlocking...");
+                write_store.write(&timed_event(Event::Unlock)).await?;
+            },
+
+            _ = idle.recv() => {
+                debug!("Idle for {} seconds.", idle_timeout);
+                write_store.write(&timed_event(Event::Idle)).await?;
+            },
+
+            _ = resume.recv() => {
+                debug!("Resumed.");
+                write_store.write(&timed_event(Event::Active)).await?;
+            },
+
             _ = tokio::signal::ctrl_c() => {
                 debug!("CTRL-C detected!");
+                cancel_swayidle.cancel();
                 break;
             },
         }
     }
 
     debug!("Closing matiane...");
+    drop(sway_idle);
 
     Ok(())
 }
@@ -189,4 +225,34 @@ fn timed_event(event: Event) -> TimedEvent {
         timestamp: Utc::now(),
         event,
     }
+}
+
+fn run_swayidle(
+    idletimer: u32,
+    token: CancellationToken,
+) -> Result<RunningHandle> {
+    let mut sway_idle = swayidle::SwayIdle::new();
+    let pid = std::process::id();
+
+    let idlesignal = libc::SIGRTMIN() + 1;
+    let resumesignal = libc::SIGRTMIN() + 2;
+    let sigusr1 = libc::SIGUSR1;
+    let sigusr2 = libc::SIGUSR2;
+
+    let before_sleep =
+        swayidle::BeforeSleep::new(format!("kill -{} {}", sigusr1, pid));
+    let after_sleep =
+        swayidle::AfterResume::new(format!("kill -{} {}", sigusr2, pid));
+
+    let on_idle = swayidle::Timeout::new_with_resume(
+        format!("kill -{} {}", idlesignal, pid),
+        idletimer,
+        format!("kill -{} {}", resumesignal, pid),
+    );
+
+    sway_idle.add_command(before_sleep);
+    sway_idle.add_command(after_sleep);
+    sway_idle.add_command(on_idle);
+
+    sway_idle.spawn(token)
 }

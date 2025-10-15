@@ -1,4 +1,4 @@
-#[cfg(target_os = "linux")]
+#![cfg(target_os = "linux")]
 use anyhow::Result;
 use matiane_core::process::{AlwaysCommandOptions, run_always_command};
 use std::path::PathBuf;
