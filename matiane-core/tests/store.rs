@@ -15,7 +15,7 @@ fn tmpdir(name: &str) -> TempDir {
 
 #[tokio::test]
 async fn store_write_touch() -> Result<()> {
-    let dir = tmpdir("write-touch");
+    let dir = tmpdir("store-write-touch");
 
     assert_eq!(fs::read_dir(dir.path())?.count(), 0);
 
@@ -30,7 +30,7 @@ async fn store_write_touch() -> Result<()> {
 
 #[tokio::test]
 async fn store_write_event() -> Result<()> {
-    let dir = tmpdir("write-event");
+    let dir = tmpdir("store-write-event");
 
     assert_eq!(fs::read_dir(dir.path())?.count(), 0);
 
@@ -62,7 +62,7 @@ async fn store_write_event() -> Result<()> {
 #[tokio::test]
 async fn store_write_several_events() -> Result<()> {
     let now = Utc.with_ymd_and_hms(2025, 01, 01, 0, 0, 0).unwrap();
-    let dir = tmpdir("write-several-events");
+    let dir = tmpdir("store-write-several-events");
     let pathbuf = dir.path().to_path_buf();
 
     let mut store = EventWriter::open(pathbuf, now).await?;
@@ -172,7 +172,7 @@ async fn store_write_several_events() -> Result<()> {
 #[tokio::test]
 async fn store_rotate_on_write() -> Result<()> {
     let now = Utc.with_ymd_and_hms(2025, 01, 01, 0, 0, 0).unwrap();
-    let dir = tmpdir("write-rotate");
+    let dir = tmpdir("store-write-rotate");
     let pathbuf = dir.path().to_path_buf();
 
     let mut store = EventWriter::open(pathbuf, now).await?;
