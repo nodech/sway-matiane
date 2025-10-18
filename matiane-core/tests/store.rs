@@ -86,21 +86,21 @@ async fn store_write_several_events() -> Result<()> {
         TestCase {
             event: TimedEvent {
                 timestamp: Utc.with_ymd_and_hms(2025, 01, 01, 0, 0, 2).unwrap(),
-                event: Event::Lock,
+                event: Event::Sleep,
             },
             expected: r#"{
                 "timestamp": "2025-01-01T00:00:02Z",
-                "event": { "type": "lock" }
+                "event": { "type": "sleep" }
             }"#,
         },
         TestCase {
             event: TimedEvent {
                 timestamp: Utc.with_ymd_and_hms(2025, 01, 01, 0, 0, 3).unwrap(),
-                event: Event::Unlock,
+                event: Event::Awake,
             },
             expected: r#"{
                 "timestamp": "2025-01-01T00:00:03Z",
-                "event": { "type": "unlock" }
+                "event": { "type": "awake" }
             }"#,
         },
         TestCase {

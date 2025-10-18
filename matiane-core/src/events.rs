@@ -15,9 +15,9 @@ pub enum Event {
     /// An interval liveness check
     Alive,
     /// swaylock: Screen is now locked or asleep
-    Lock,
+    Sleep,
     /// swaylock: Screen is now unlocked or awake
-    Unlock,
+    Awake,
     /// swayidle: Went to idle state
     Idle,
     /// swayidle: Back to active state

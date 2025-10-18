@@ -124,12 +124,12 @@ async fn main() -> Result<()> {
 
             _ = sigusr1.recv() => {
                 debug!("Sleeping or locking...");
-                write_store.write(&timed_event(Event::Lock)).await?;
+                write_store.write(&timed_event(Event::Sleep)).await?;
             },
 
             _ = sigusr2.recv() => {
                 debug!("Waking up or unlocking...");
-                write_store.write(&timed_event(Event::Unlock)).await?;
+                write_store.write(&timed_event(Event::Awake)).await?;
             },
 
             _ = idle.recv() => {
