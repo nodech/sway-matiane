@@ -26,7 +26,7 @@ use sway::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let xdg = Xdg::new(sway_matiane::NAME.into());
+    let xdg = Xdg::new(matiane_core::NAME.into());
 
     let ParsedArgs {
         config_file,
@@ -42,19 +42,20 @@ async fn main() -> Result<()> {
         .with_context(|| "Could not find swaysock env var.")?
         .into();
 
-    let state_dir = cfg.state_dir;
+    let state_dir = cfg.general.state_dir;
     let now = Utc::now();
     debug!("Opening store...");
     let mut write_store = EventWriter::open(state_dir, now).await?;
 
     debug!("Running swayidle...");
+    info!("Idle timoeut is set to: {} seconds.", cfg.sway.idle_timeout);
     let cancel_swayidle = CancellationToken::new();
-    let idle_timeout = 60;
-    let sway_idle = run_swayidle(idle_timeout, cancel_swayidle.clone())?;
+    let sway_idle =
+        run_swayidle(cfg.sway.idle_timeout, cancel_swayidle.clone())?;
 
     debug!("Opening swaysocket...");
     let events = subscribe(&swaysock_path, EventType::Window).await?;
-    let mut alive_interval = interval(cfg.live_interval);
+    let mut alive_interval = interval(cfg.sway.live_interval);
     alive_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     info!("Mematiane has started!");
@@ -133,7 +134,7 @@ async fn main() -> Result<()> {
             },
 
             _ = idle.recv() => {
-                debug!("Idle for {} seconds.", idle_timeout);
+                debug!("Idle for {} seconds.", cfg.sway.idle_timeout);
                 write_store.write(&timed_event(Event::Idle)).await?;
             },
 
@@ -193,16 +194,16 @@ fn parse_args(xdg: &Xdg) -> ParsedArgs {
     }
 }
 
-async fn load_config(file: &PathBuf) -> Result<config::SwayMatianeConfig> {
+async fn load_config(file: &PathBuf) -> Result<config::SwayCliConfig> {
     let file_str = match tokio::fs::read_to_string(file).await {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(config::SwayMatianeConfig::default());
+            return Ok(config::SwayCliConfig::default());
         }
         Err(e) => return Err(e).context("Failed to read configuration file"),
     };
 
-    let parsed = toml::from_str::<config::SwayMatianeConfig>(&file_str)
+    let parsed = toml::from_str::<config::SwayCliConfig>(&file_str)
         .context("Failed to parse TOML from configuration file")?;
 
     Ok(parsed)
