@@ -1,5 +1,8 @@
-use zbus::{Connection, interface, zvariant::{Value, Type, Array, ObjectPath}};
 use tokio::sync::OnceCell;
+use zbus::{
+    Connection, interface,
+    zvariant::{Array, ObjectPath, Type, Value},
+};
 
 pub struct Tray;
 
