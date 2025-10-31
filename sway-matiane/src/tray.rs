@@ -1,7 +1,9 @@
 use zbus::{
-    interface,
+    Connection, connection, interface,
     zvariant::{ObjectPath, Type, Value},
 };
+
+use thiserror::Error;
 
 pub struct Tray;
 
@@ -119,4 +121,32 @@ impl Tray {
             description: "Activity logger.".into(),
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum TrayError {
+    #[error("DBus error: {0}")]
+    DBusError(#[from] zbus::Error),
+}
+
+pub async fn show_tray() -> Result<Connection, TrayError> {
+    let connection = connection::Builder::session()?
+        .serve_at("/StatusNotifierItem", Tray)?
+        .build()
+        .await?;
+
+    let path = format!("{}", connection.unique_name().unwrap());
+
+    // Notify dbus/tray that we exist.
+    connection
+        .call_method(
+            Some("org.kde.StatusNotifierWatcher"),
+            "/StatusNotifierWatcher",
+            Some("org.kde.StatusNotifierWatcher"),
+            "RegisterStatusNotifierItem",
+            &path,
+        )
+        .await?;
+
+    Ok(connection)
 }

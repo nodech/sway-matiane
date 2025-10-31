@@ -15,7 +15,7 @@ use matiane_core::store::{EventWriter, acquire_lock_file};
 use matiane_core::xdg::Xdg;
 use std::path::PathBuf;
 use std::str::FromStr;
-use sway_matiane::{config, sway, swayidle};
+use sway_matiane::{config, sway, swayidle, tray};
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::time::{MissedTickBehavior, interval};
 use tokio_util::sync::CancellationToken;
@@ -62,6 +62,9 @@ async fn main() -> Result<()> {
     let events = subscribe(&swaysock_path, EventType::Window).await?;
     let mut alive_interval = interval(cfg.sway.live_interval);
     alive_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+    debug!("Showing tray...");
+    let tray = tray::show_tray().await?;
 
     info!("Mematiane has started!");
 
@@ -149,7 +152,7 @@ async fn main() -> Result<()> {
             },
 
             _ = tokio::signal::ctrl_c() => {
-                debug!("CTRL-C detected!");
+                debug!("SIGINT/CTRL-C detected!");
                 cancel_swayidle.cancel();
                 break;
             },
@@ -158,6 +161,7 @@ async fn main() -> Result<()> {
 
     debug!("Closing matiane...");
     drop(sway_idle);
+    drop(tray);
     drop(lockfile);
 
     Ok(())
