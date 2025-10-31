@@ -1,11 +1,13 @@
 use thiserror::Error;
 
 use super::events::TimedEvent;
+use std::time::Duration;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde_json;
 use std::path::PathBuf;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use log::error;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -94,6 +96,60 @@ async fn open_write_file(filepath: PathBuf) -> Result<File, StoreError> {
         .open(filepath)
         .await
         .map_err(StoreError::Io)
+}
+
+pub const LOCK_FILE_TIME_SEC: Duration = Duration::from_secs(60);
+
+#[derive(Debug)]
+pub struct LockFile(std::fs::File);
+
+impl Drop for LockFile {
+    fn drop(&mut self) {
+        if let Err(e) = self.0.unlock() {
+            error!("Error unlocking file: {}", e);
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum LockFileError {
+    #[error("LockFile IO Error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("LockFile failed to acquire lock.")]
+    TryLockError(#[from] std::fs::TryLockError),
+    #[error("Opened too soon.")]
+    OpenedToSoon,
+}
+
+pub async fn acquire_lock_file(filepath: PathBuf) -> Result<LockFile, LockFileError> {
+    let filename = filepath.join("LOCK");
+
+    // Time guard ?
+    // let stat = tokio::fs::metadata(&filename).await;
+
+    // if let Ok(stat) = stat && let Ok(modified) = stat.modified() {
+    //     let diff = std::time::SystemTime::now()
+    //         .duration_since(modified)
+    //         .unwrap_or(Duration::new(0, 0));
+
+    //     if LOCK_FILE_TIME_SEC.gt(&diff) {
+    //         return Err(LockFileError::OpenedToSoon);
+    //     }
+    // }
+
+    let file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(filename)
+        .await
+        .map_err(LockFileError::Io)?;
+
+    let stdfile = file.into_std().await;
+    stdfile.try_lock()?;
+    let lock = LockFile(stdfile);
+
+    Ok(lock)
 }
 
 fn get_filename_by_date(date: NaiveDate) -> PathBuf {

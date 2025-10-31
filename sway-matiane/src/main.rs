@@ -11,7 +11,7 @@ use log::{LevelFilter, debug, error, info, trace, warn};
 use matiane_core::events::{Event, Focused, TimedEvent};
 use matiane_core::log::LoggerBuilder;
 use matiane_core::process::RunningHandle;
-use matiane_core::store::EventWriter;
+use matiane_core::store::{EventWriter, acquire_lock_file};
 use matiane_core::xdg::Xdg;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -37,6 +37,7 @@ async fn main() -> Result<()> {
 
     debug!("Loading config...");
     let cfg = load_config(&config_file).await?;
+    trace!("Config: {:?}", cfg);
 
     let swaysock_path: PathBuf = std::env::var("SWAYSOCK")
         .with_context(|| "Could not find swaysock env var.")?
@@ -44,6 +45,10 @@ async fn main() -> Result<()> {
 
     let state_dir = cfg.general.state_dir;
     let now = Utc::now();
+
+    debug!("Acquiring lockfile...");
+    let lockfile = acquire_lock_file(state_dir.clone()).await?;
+
     debug!("Opening store...");
     let mut write_store = EventWriter::open(state_dir, now).await?;
 
@@ -153,6 +158,7 @@ async fn main() -> Result<()> {
 
     debug!("Closing matiane...");
     drop(sway_idle);
+    drop(lockfile);
 
     Ok(())
 }
