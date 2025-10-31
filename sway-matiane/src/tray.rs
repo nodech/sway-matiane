@@ -1,7 +1,6 @@
-use tokio::sync::OnceCell;
 use zbus::{
-    Connection, interface,
-    zvariant::{Array, ObjectPath, Type, Value},
+    interface,
+    zvariant::{ObjectPath, Type, Value},
 };
 
 pub struct Tray;
@@ -63,7 +62,7 @@ impl Tray {
     }
 
     #[zbus(property)]
-    async fn menu(&self) -> ObjectPath {
+    async fn menu(&self) -> ObjectPath<'_> {
         ObjectPath::from_static_str_unchecked("/")
     }
 

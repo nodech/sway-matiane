@@ -1,13 +1,13 @@
 use thiserror::Error;
 
 use super::events::TimedEvent;
-use std::time::Duration;
 use chrono::{DateTime, NaiveDate, Utc};
+use log::error;
 use serde_json;
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use log::error;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -121,7 +121,9 @@ pub enum LockFileError {
     OpenedToSoon,
 }
 
-pub async fn acquire_lock_file(filepath: PathBuf) -> Result<LockFile, LockFileError> {
+pub async fn acquire_lock_file(
+    filepath: PathBuf,
+) -> Result<LockFile, LockFileError> {
     let filename = filepath.join("LOCK");
 
     // Time guard ?
