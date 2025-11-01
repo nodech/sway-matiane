@@ -1,8 +1,17 @@
 use zbus::{
-    Connection, connection, interface,
+    Connection, connection,
+    fdo::DBusProxy,
+    interface,
     zvariant::{ObjectPath, Type, Value},
 };
 
+use futures::StreamExt;
+use std::time::Duration;
+use tokio::task::{JoinHandle, spawn};
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+
+use log::debug;
 use thiserror::Error;
 
 pub struct Tray;
@@ -90,12 +99,12 @@ impl Tray {
     }
 
     #[zbus(property)]
-    async fn overlay_icon_pixmap(&self) -> Icon {
-        Icon {
+    async fn overlay_icon_pixmap(&self) -> Vec<Icon> {
+        vec![Icon {
             width: 0,
             height: 0,
             data: vec![],
-        }
+        }]
     }
 
     #[zbus(property)]
@@ -104,12 +113,12 @@ impl Tray {
     }
 
     #[zbus(property)]
-    async fn attention_icon_pixmap(&self) -> Icon {
-        Icon {
+    async fn attention_icon_pixmap(&self) -> Vec<Icon> {
+        vec![Icon {
             width: 0,
             height: 0,
             data: vec![],
-        }
+        }]
     }
 
     #[zbus(property)]
@@ -129,24 +138,97 @@ pub enum TrayError {
     DBusError(#[from] zbus::Error),
 }
 
-pub async fn show_tray() -> Result<Connection, TrayError> {
-    let connection = connection::Builder::session()?
-        .serve_at("/StatusNotifierItem", Tray)?
-        .build()
-        .await?;
+pub enum TrayState {
+    Offline,
+    Uninitialized,
+    Initialized,
+}
 
-    let path = format!("{}", connection.unique_name().unwrap());
+struct TrayConn<'a> {
+    conn: &'a Connection,
+    state: TrayState,
+}
 
-    // Notify dbus/tray that we exist.
-    connection
-        .call_method(
-            Some("org.kde.StatusNotifierWatcher"),
-            "/StatusNotifierWatcher",
-            Some("org.kde.StatusNotifierWatcher"),
-            "RegisterStatusNotifierItem",
-            &path,
-        )
-        .await?;
+impl TrayConn<'_> {
+    async fn register(&mut self) -> Result<zbus::Message, TrayError> {
+        let path = self.conn.unique_name().unwrap();
+        let message = self
+            .conn
+            .call_method(
+                Some("org.kde.StatusNotifierWatcher"),
+                "/StatusNotifierWatcher",
+                Some("org.kde.StatusNotifierWatcher"),
+                "RegisterStatusNotifierItem",
+                &path,
+            )
+            .await?;
 
-    Ok(connection)
+        self.state = TrayState::Initialized;
+
+        debug!("Registering item at path: {}", path);
+
+        Ok(message)
+    }
+}
+
+pub fn spawn_tray(
+    token: CancellationToken,
+) -> JoinHandle<Result<(), anyhow::Error>> {
+    spawn(async move {
+        let connection = connection::Builder::session()?
+            .serve_at("/StatusNotifierItem", Tray)?
+            .build()
+            .await?;
+
+        let mut tcon = TrayConn {
+            conn: &connection,
+            state: TrayState::Uninitialized,
+        };
+
+        let dbus = DBusProxy::new(&connection).await?;
+        let mut change_signal = dbus
+            .receive_name_owner_changed_with_args(&[(
+                0,
+                "org.kde.StatusNotifierWatcher",
+            )])
+            .await?;
+
+        loop {
+            match tcon.state {
+                TrayState::Offline | TrayState::Initialized => {}
+                TrayState::Uninitialized => {
+                    if tcon.register().await.is_err() {
+                        // consider incrementing time every time
+                        // it fails, with upper limit.
+                        sleep(Duration::from_secs(2)).await;
+                        continue;
+                    }
+                }
+            }
+
+            // watch dbus Owner change event
+            tokio::select! {
+                _ = token.cancelled() => {
+                    debug!("Shutting down.");
+                    break;
+                },
+                chsignal = change_signal.next() => {
+                    if chsignal.is_none() {
+                        continue;
+                    }
+
+                    let changed = chsignal.unwrap();
+                    let args = changed.args().unwrap();
+
+                    if args.new_owner.is_none() {
+                        tcon.state = TrayState::Offline;
+                    } else {
+                        tcon.state = TrayState::Uninitialized;
+                    }
+                },
+            }
+        }
+
+        Ok(())
+    })
 }

@@ -15,7 +15,6 @@ use matiane_core::store::{EventWriter, acquire_lock_file};
 use matiane_core::xdg::Xdg;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::time::Duration;
 use sway_matiane::{config, sway, swayidle, tray};
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::time::{MissedTickBehavior, interval};
@@ -55,9 +54,8 @@ async fn main() -> Result<()> {
 
     debug!("Running swayidle...");
     info!("Idle timoeut is set to: {} seconds.", cfg.sway.idle_timeout);
-    let cancel_swayidle = CancellationToken::new();
-    let sway_idle =
-        run_swayidle(cfg.sway.idle_timeout, cancel_swayidle.clone())?;
+    let cancel_tok = CancellationToken::new();
+    let sway_idle = run_swayidle(cfg.sway.idle_timeout, cancel_tok.clone())?;
 
     debug!("Opening swaysocket...");
     let events = subscribe(&swaysock_path, EventType::Window).await?;
@@ -65,7 +63,7 @@ async fn main() -> Result<()> {
     alive_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     debug!("Showing tray...");
-    let tray = run_tray(5, Duration::from_secs(1)).await?;
+    let _tray = tray::spawn_tray(cancel_tok.clone());
 
     info!("Mematiane has started!");
 
@@ -154,7 +152,7 @@ async fn main() -> Result<()> {
 
             _ = tokio::signal::ctrl_c() => {
                 debug!("SIGINT/CTRL-C detected!");
-                cancel_swayidle.cancel();
+                cancel_tok.cancel();
                 break;
             },
         }
@@ -162,7 +160,6 @@ async fn main() -> Result<()> {
 
     info!("Closing matiane...");
     drop(sway_idle);
-    drop(tray);
     drop(lockfile);
 
     Ok(())
@@ -267,25 +264,4 @@ fn run_swayidle(
     sway_idle.add_command(on_idle);
 
     sway_idle.spawn(token)
-}
-
-// We may have to wait for tray to connect.
-
-async fn run_tray(
-    mut retry_count: u32,
-    retry_delay: Duration,
-) -> Result<zbus::Connection> {
-    loop {
-        debug!("Trying to show tray...");
-        if let Ok(conn) = tray::show_tray().await {
-            return Ok(conn);
-        }
-
-        if retry_count == 0 {
-            return Err(anyhow::anyhow!("Failed to run tray!"));
-        }
-
-        retry_count = retry_count.saturating_sub(1);
-        tokio::time::sleep(retry_delay).await;
-    }
 }
