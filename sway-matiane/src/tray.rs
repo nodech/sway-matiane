@@ -194,16 +194,18 @@ pub fn spawn_tray(
             .await?;
 
         loop {
-            match tcon.state {
-                TrayState::Offline | TrayState::Initialized => {}
-                TrayState::Uninitialized => {
-                    if tcon.register().await.is_err() {
-                        // consider incrementing time every time
-                        // it fails, with upper limit.
-                        sleep(Duration::from_secs(2)).await;
-                        continue;
+            if matches!(tcon.state, TrayState::Uninitialized)
+                && tcon.register().await.is_err()
+            {
+                // consider incrementing time every time
+                // it fails, with upper limit.
+                tokio::select! {
+                    _ = sleep(Duration::from_secs(2)) => {},
+                    _ = token.cancelled() => {
+                        break;
                     }
                 }
+                continue;
             }
 
             // watch dbus Owner change event
@@ -214,17 +216,15 @@ pub fn spawn_tray(
                 },
                 chsignal = change_signal.next() => {
                     if chsignal.is_none() {
-                        continue;
+                        log::error!("DBus name owner change stream ended unexpectedly.");
+                        break;
                     }
 
                     let changed = chsignal.unwrap();
                     let args = changed.args().unwrap();
 
-                    if args.new_owner.is_none() {
-                        tcon.state = TrayState::Offline;
-                    } else {
-                        tcon.state = TrayState::Uninitialized;
-                    }
+                    tcon.state = args.new_owner.as_ref()
+                        .map_or_else(|| TrayState::Offline, |_| TrayState::Uninitialized);
                 },
             }
         }
