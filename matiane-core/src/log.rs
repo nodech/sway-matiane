@@ -108,3 +108,18 @@ impl LoggerBuilder {
         }
     }
 }
+
+pub fn init_global_logger(
+    level: LevelFilter,
+) -> Result<(), log::SetLoggerError> {
+    let logger = LoggerBuilder::new()
+        .with_level(level)
+        .to_stderr(true)
+        .with_threads(true)
+        .build();
+
+    log::set_boxed_logger(Box::new(logger))?;
+    log::set_max_level(level);
+
+    Ok(())
+}

@@ -1,0 +1,29 @@
+[package]
+name = "matiane"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "matiane"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+log.workspace = true
+futures.workspace = true
+matiane-core.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+toml.workspace = true
+serde.workspace = true
+
+[dependencies.iced]
+git = "https://github.com/iced-rs/iced.git"
+rev = "ea614387f4d94960911b0a7d8ce25c02edb470c5"
+features = ["tokio"]
+
+[build-dependencies]
+iced_fontello = "0.13"

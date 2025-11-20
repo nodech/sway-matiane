@@ -1,0 +1,8 @@
+module = "icon"
+
+[glyphs]
+#clipboard = "fontawesome-docs"
+clock = "fontawesome-clock"
+sun = "fontawesome-sun"
+moon = "fontawesome-moon"
+globe = "fontawesome-globe"

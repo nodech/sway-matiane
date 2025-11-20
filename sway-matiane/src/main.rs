@@ -9,7 +9,7 @@ use clap::{
 use futures::{StreamExt, future::ready};
 use log::{LevelFilter, debug, error, info, trace, warn};
 use matiane_core::events::{Event, Focused, TimedEvent};
-use matiane_core::log::LoggerBuilder;
+use matiane_core::log::init_global_logger;
 use matiane_core::process::RunningHandle;
 use matiane_core::store::{EventWriter, acquire_lock_file};
 use matiane_core::xdg::Xdg;
@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
         log_level,
     } = parse_args(&xdg);
 
-    init_logger(log_level)?;
+    init_global_logger(log_level)?;
 
     debug!("Loading config...");
     let cfg = load_config(&config_file).await?;
@@ -215,18 +215,6 @@ async fn load_config(file: &PathBuf) -> Result<config::SwayCliConfig> {
         .context("Failed to parse TOML from configuration file")?;
 
     Ok(parsed)
-}
-
-fn init_logger(level: LevelFilter) -> Result<()> {
-    let logger = LoggerBuilder::new()
-        .with_level(level)
-        .to_stderr(true)
-        .with_threads(true)
-        .build();
-
-    log::set_boxed_logger(Box::new(logger))?;
-    log::set_max_level(level);
-    Ok(())
 }
 
 fn timed_event(event: Event) -> TimedEvent {

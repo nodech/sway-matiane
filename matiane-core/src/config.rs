@@ -6,7 +6,7 @@ fn default_state_dir() -> PathBuf {
     xdg::data_dir(Some(crate::NAME))
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct GeneralConfig {
     #[serde(default = "default_state_dir")]

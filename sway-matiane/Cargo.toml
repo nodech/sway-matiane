@@ -15,7 +15,7 @@ path = "src/main.rs"
 anyhow.workspace = true
 bytes = "1.10.1"
 chrono.workspace = true
-clap = { version = "4.5.43", features = ["cargo"] }
+clap.workspace = true
 futures.workspace = true
 log.workspace = true
 libc = "0.2.177"
